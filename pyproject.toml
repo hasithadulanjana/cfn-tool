@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cfn-tool"
+version = "0.1.0"
+description = "A simple CLI tool to manage AWS CloudFormation stacks"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Hasitha Palihena"},
+]
+dependencies = [
+    "click>=8.1",
+    "boto3>=1.28",
+    "cfn-lint>=1.0",
+    "pyyaml>=6.0",
+    "rich>=13.0",
+    "mcp[cli]>=1.0",
+    "diagrams>=0.23",
+]
+
+[project.scripts]
+cfn = "cfn_tool.cli:cli"
+cfn-mcp = "cfn_tool.mcp_server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
