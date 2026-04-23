@@ -43,11 +43,25 @@ else
 fi
 
 echo ""
-pip3 install "$SCRIPT_DIR"
+if pip3 --version >/dev/null 2>&1; then
+    PIP_CMD="pip3"
+    PYTHON_CMD="python3"
+elif command -v pip3.13 &>/dev/null; then
+    PIP_CMD="pip3.13"
+    PYTHON_CMD="python3.13"
+elif command -v pip3.12 &>/dev/null; then
+    PIP_CMD="pip3.12"
+    PYTHON_CMD="python3.12"
+else
+    echo "⚠️  No working pip3 found. Please fix your python installation."
+    exit 1
+fi
+
+$PIP_CMD install "$SCRIPT_DIR"
 
 # Get Python user bin path
-USER_BIN="$(python3 -m site --user-base)/bin"
-GLOBAL_BIN="$(python3 -c 'import sysconfig; print(sysconfig.get_path("scripts"))')"
+USER_BIN="$($PYTHON_CMD -m site --user-base)/bin"
+GLOBAL_BIN="$($PYTHON_CMD -c 'import sysconfig; print(sysconfig.get_path("scripts"))')"
 
 # Check if cfn is already reachable
 if command -v cfn &>/dev/null; then
