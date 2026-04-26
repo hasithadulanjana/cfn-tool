@@ -8,7 +8,7 @@ Inspired by [rain](https://github.com/aws-cloudformation/rain), with live cost e
 
 ```bash
 # One-liner: installs cfn-tool, Graphviz, uvx, shell completions, and PATH setup
-./cfn-tool/install.sh
+./install.sh
 
 # Or manual install
 pip3 install ./cfn-tool
