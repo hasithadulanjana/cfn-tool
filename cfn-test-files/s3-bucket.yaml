@@ -1,0 +1,15 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 Bucket
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: Name of the S3 bucket
+    Default : cfn-tool-test
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+  
