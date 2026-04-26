@@ -1,6 +1,6 @@
 # cfn-tool
 
-A CLI to manage AWS CloudFormation stacks and templates, created by Hasitha Palihena to help engineers create CFN templates, estimate costs, generate architecture diagrams, and deploy infrastructure — all from one tool.
+A CLI to manage AWS CloudFormation stacks and templates, created to help engineers create CFN templates, estimate costs, generate architecture diagrams, and deploy infrastructure — all from one tool.
 
 Inspired by [rain](https://github.com/aws-cloudformation/rain), with live cost estimation and architecture diagram generation powered by [MCP](https://modelcontextprotocol.io/).
 
