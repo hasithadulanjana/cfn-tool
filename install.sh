@@ -1,10 +1,7 @@
 #!/bin/bash
 # cfn-tool installer for macOS
-
 set -e
-
 echo "🔧 Installing cfn-tool..."
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Install system dependencies
@@ -21,8 +18,7 @@ else
         echo "✅ Graphviz installed via Homebrew"
     else
         echo "⚠️  Homebrew not found. Install Graphviz manually:"
-        echo "   brew install graphviz"
-        echo "   (or: sudo port install graphviz)"
+        echo "   brew install graphviz  (or: sudo port install graphviz)"
     fi
 fi
 
@@ -34,32 +30,88 @@ else
     if command -v brew &>/dev/null; then
         brew install uv
         echo "✅ uv installed via Homebrew"
-    elif command -v pip3 &>/dev/null; then
-        pip3 install uv
-        echo "✅ uv installed via pip"
     else
         echo "⚠️  Install uv manually: https://docs.astral.sh/uv/getting-started/installation/"
     fi
 fi
 
 echo ""
-if pip3 --version >/dev/null 2>&1; then
-    PIP_CMD="pip3"
-    PYTHON_CMD="python3"
-elif command -v pip3.13 &>/dev/null; then
-    PIP_CMD="pip3.13"
-    PYTHON_CMD="python3.13"
-elif command -v pip3.12 &>/dev/null; then
-    PIP_CMD="pip3.12"
-    PYTHON_CMD="python3.12"
-else
-    echo "⚠️  No working pip3 found. Please fix your python installation."
+
+# ---------------------------------------------------------------------------
+# Resolve a working Python + pip.
+# Prefer `python3 -m pip` over the pip3 shim — the shim can crash on broken
+# libexpat linkage (e.g. Python 3.14 + old macOS libexpat) while the module
+# invocation works fine.
+# ---------------------------------------------------------------------------
+# Prefer uv — it manages its own Python and avoids Homebrew PEP 668 restrictions
+if command -v uv &>/dev/null; then
+    echo "✅ Using uv for installation"
+    uv tool install "$SCRIPT_DIR" --python 3.12
+    UV_TOOL_BIN="$(uv tool dir)/bin"
+    # uv tool install puts the binary in its own bin dir
+    if command -v cfn &>/dev/null; then
+        echo "✅ cfn-tool installed successfully"
+        exit 0
+    fi
+    # Add uv tool bin to PATH if needed
+    BIN_PATH="$(uv tool dir 2>/dev/null)"
+    # Resolve the actual bin path
+    if [ -f "$HOME/.local/bin/cfn" ]; then
+        BIN_PATH="$HOME/.local/bin"
+    elif [ -f "$UV_TOOL_BIN/cfn" ]; then
+        BIN_PATH="$UV_TOOL_BIN"
+    fi
+    if [ -n "$BIN_PATH" ] && [ -f "$BIN_PATH/cfn" ]; then
+        export PATH="$PATH:$BIN_PATH"
+        if [ -f "$HOME/.zshrc" ]; then SHELL_RC="$HOME/.zshrc"
+        elif [ -f "$HOME/.bashrc" ]; then SHELL_RC="$HOME/.bashrc"
+        else SHELL_RC="$HOME/.zshrc"; fi
+        EXPORT_LINE="export PATH=\"\$PATH:$BIN_PATH\""
+        if ! grep -qF "$BIN_PATH" "$SHELL_RC" 2>/dev/null; then
+            echo "" >> "$SHELL_RC"
+            echo "# cfn-tool CLI" >> "$SHELL_RC"
+            echo "$EXPORT_LINE" >> "$SHELL_RC"
+            echo "✅ Added $BIN_PATH to PATH in $SHELL_RC"
+        else
+            echo "✅ PATH already configured in $SHELL_RC"
+        fi
+        cfn completions zsh 2>/dev/null && echo "✅ Shell completions installed" || true
+        echo ""
+        echo "🎉 Done! To start using cfn:"
+        echo "   source $SHELL_RC"
+        echo "   cfn --help"
+        exit 0
+    fi
+    echo "❌ uv tool install ran but cfn binary not found. Try: uv tool install $SCRIPT_DIR"
     exit 1
 fi
 
-$PIP_CMD install "$SCRIPT_DIR"
+# Fallback: find a working Python pip
+PYTHON_CMD=""
+PIP_CMD=""
 
-# Get Python user bin path
+for py in python3 python3.14 python3.13 python3.12 python3.11; do
+    if command -v "$py" &>/dev/null; then
+        if "$py" -c "import pip._internal.commands.install" &>/dev/null 2>&1; then
+            PYTHON_CMD="$py"
+            PIP_CMD="$py -m pip"
+            echo "✅ Using $py (invoked as: $PIP_CMD)"
+            break
+        fi
+    fi
+done
+
+if [ -z "$PYTHON_CMD" ]; then
+    echo "❌ No working Python + pip found, and uv is not available."
+    echo "   Install uv: brew install uv  (then re-run this script)"
+    exit 1
+fi
+
+$PIP_CMD install --user "$SCRIPT_DIR"
+
+# ---------------------------------------------------------------------------
+# Resolve install locations
+# ---------------------------------------------------------------------------
 USER_BIN="$($PYTHON_CMD -m site --user-base)/bin"
 GLOBAL_BIN="$($PYTHON_CMD -c 'import sysconfig; print(sysconfig.get_path("scripts"))')"
 
@@ -79,11 +131,16 @@ elif [ -f "$GLOBAL_BIN/cfn" ]; then
 fi
 
 if [ -z "$BIN_PATH" ]; then
-    echo "⚠️  cfn binary not found. You may need to run: pip3 install --user ."
+    echo "⚠️  cfn binary not found in expected locations:"
+    echo "   user:   $USER_BIN"
+    echo "   global: $GLOBAL_BIN"
+    echo "   Try running manually: $PIP_CMD install --user ."
     exit 1
 fi
 
-# Detect shell config file
+# ---------------------------------------------------------------------------
+# PATH setup
+# ---------------------------------------------------------------------------
 if [ -f "$HOME/.zshrc" ]; then
     SHELL_RC="$HOME/.zshrc"
 elif [ -f "$HOME/.bashrc" ]; then
@@ -94,9 +151,7 @@ else
     SHELL_RC="$HOME/.bashrc"
 fi
 
-# Add to PATH if not already there
 EXPORT_LINE="export PATH=\"\$PATH:$BIN_PATH\""
-
 if grep -qF "$BIN_PATH" "$SHELL_RC" 2>/dev/null; then
     echo "✅ PATH already configured in $SHELL_RC"
 else
@@ -106,21 +161,23 @@ else
     echo "✅ Added $BIN_PATH to PATH in $SHELL_RC"
 fi
 
+# ---------------------------------------------------------------------------
+# Shell completions
+# ---------------------------------------------------------------------------
 echo ""
 echo "🔧 Setting up shell completions..."
 
-# Detect shell type for completions
+COMP_SHELL="bash"
 if [ -n "$ZSH_VERSION" ] || [ "$SHELL" = "/bin/zsh" ]; then
     COMP_SHELL="zsh"
-else
-    COMP_SHELL="bash"
 fi
 
-# Source the rc so cfn is on PATH, then install completions
 export PATH="$PATH:$BIN_PATH"
-cfn completions "$COMP_SHELL" 2>/dev/null && echo "✅ Shell completions installed for $COMP_SHELL" || echo "⚠️  Completions setup skipped (run 'cfn completions $COMP_SHELL' manually)"
+cfn completions "$COMP_SHELL" 2>/dev/null \
+    && echo "✅ Shell completions installed for $COMP_SHELL" \
+    || echo "⚠️  Completions skipped — run 'cfn completions $COMP_SHELL' manually after sourcing your shell"
 
 echo ""
-echo "🎉 Done! Run this to start using cfn now:"
+echo "🎉 Done! To start using cfn:"
 echo "   source $SHELL_RC"
 echo "   cfn --help"
